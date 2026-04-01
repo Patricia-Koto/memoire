@@ -8,20 +8,15 @@ from PIL import Image
 st.set_page_config(page_title="RDC - Expert Pauvreté", page_icon="🇨🇩", layout="wide")
 
 # --- CHEMINS DE BASE ---
-APP_DIR = Path(__file__).resolve().parent          # .../memoire/app
-PROJECT_ROOT = APP_DIR.parent                      # .../memoire
+APP_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = APP_DIR.parent
 
 # --- CHEMIN DU LOGO ---
-# Localement ton logo est dans : C:\Users\LENOVO\Desktop\memoire\app
-# Donc ici on cherche dans le même dossier que app.py
 logo_path = APP_DIR / "logo_rdc.png"
 
 # --- FONCTION DE CHARGEMENT DU MEILLEUR MODÈLE ---
 @st.cache_resource
 def load_best_pipeline():
-    # Localement ton modèle est dans :
-    # C:\Users\LENOVO\Desktop\memoire\notebooks\outputs\models
-    # Donc on reconstruit ce chemin de façon portable
     model_dir = PROJECT_ROOT / "notebooks" / "outputs" / "models"
 
     list_of_files = sorted(model_dir.glob("*.pkl"), key=lambda p: p.stat().st_mtime) if model_dir.exists() else []
@@ -34,7 +29,6 @@ def load_best_pipeline():
     try:
         bundle = joblib.load(latest_file)
 
-        # Si le .pkl contient un dict avec 'model'
         if isinstance(bundle, dict) and "model" in bundle:
             model = bundle["model"]
         else:
@@ -97,12 +91,21 @@ with st.form("form_ecvm_final"):
         c3, c4 = st.columns(2)
         logem = c3.selectbox("Statut d'occupation", ["Propriétaire", "Locataire", "Logé gratuitement", "Autre"])
         typmen = c3.selectbox("Type de ménage", ["Nucléaire", "Élargi", "Monoparental", "Isolé"])
+        handig = c3.radio("Membre avec handicap", ["Oui", "Non"], horizontal=True)
+        taille_menage = c3.number_input("Taille du ménage", 1, 30, 5)
+
         elec_ac = c4.radio("Accès électricité", ["Oui", "Non"], horizontal=True)
         toilet = c4.radio("Toilettes saines", ["Oui", "Non"], horizontal=True)
         telpor = c4.radio("Possède téléphone", ["Oui", "Non"], horizontal=True)
-        handig = c3.radio("Membre avec handicap", ["Oui", "Non"], horizontal=True)
         nb_membres_compte_bancaire = c4.number_input(
             "Nombre de membres avec compte bancaire",
+            min_value=0,
+            max_value=30,
+            value=0,
+            step=1
+        )
+        nb_dependants = c4.number_input(
+            "Nombre de personnes à charge (membres de moins de 15 ans + membres de 65 ans et plus)",
             min_value=0,
             max_value=30,
             value=0,
@@ -112,15 +115,7 @@ with st.form("form_ecvm_final"):
     with tab3:
         c5, c6 = st.columns(2)
         province = c5.selectbox("Province", ["Kinshasa", "Bas-Uele", "Equateur", "Haut-Katanga", "Kasaï", "Lualaba", "Nord-Kivu", "Sud-Kivu", "Tshopo", "Autre"])
-        milieu = c5.radio("Milieu de résidence", ["Urbain", "Rural"], horizontal=True)
-        taille_menage = c6.number_input("Taille du ménage", 1, 30, 5)
-        nb_dependants = c6.number_input(
-            "Nombre de personnes à charge (membres de moins de 15 ans + membres de 65 ans et plus)",
-            min_value=0,
-            max_value=30,
-            value=0,
-            step=1
-        )
+        milieu = c6.radio("Milieu de résidence", ["Urbain", "Rural"], horizontal=True)
 
     submit = st.form_submit_button("📊 ANALYSER LE STATUT")
 
