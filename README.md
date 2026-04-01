@@ -1,4 +1,7 @@
 # 📊 Prédiction de la pauvreté – ECVM RDC 2024
+## 🌐 Application en ligne
+
+👉 Accéder à l’application :  https://predictionpauvreterdc.streamlit.app/
 
 ## 🎯 Objectif du projet
 
