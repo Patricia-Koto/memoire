@@ -197,3 +197,27 @@ if submit:
 
     except Exception as e:
         st.error(f"Erreur technique : {e}")
+
+st.markdown(
+    """
+    <style>
+    .footer {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        background-color: #f9f9f9;
+        text-align: center;
+        padding: 10px;
+        font-size: 0.85em;
+        color: gray;
+        border-top: 1px solid #ddd;
+    }
+    </style>
+
+    <div class="footer">
+        Application développée par <b>Patricia KOTO NGBANGA</b> | © 2026
+    </div>
+    """,
+    unsafe_allow_html=True
+)
