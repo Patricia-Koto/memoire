@@ -115,7 +115,7 @@ with st.form("form_ecvm_final"):
         milieu = c5.radio("Milieu de résidence", ["Urbain", "Rural"], horizontal=True)
         taille_menage = c6.number_input("Taille du ménage", 1, 30, 5)
         nb_dependants = c6.number_input(
-            "Nombre de personnes à charge",
+            "Nombre de personnes à charge (membres de moins de 15 ans + membres de 65 ans et plus)",
             min_value=0,
             max_value=30,
             value=0,
