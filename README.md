@@ -3,6 +3,10 @@
 
 👉 Accéder à l’application :  https://predictionpauvreterdc.streamlit.app/
 
+## Lien vers les résultas
+Toutes les analyses et les étapes détaillées sont disponibles dans le notebook suivant :  
+👉 https://github.com/Patricia-Koto/memoire/blob/main/notebooks/notebook_prediction_pauvrete_ecvm.ipynb
+
 ## 🎯 Objectif du projet
 
 Ce projet vise à prédire la pauvreté des ménages à partir des données ECVM RDC 2024.
