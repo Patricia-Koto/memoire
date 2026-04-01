@@ -1,61 +1,81 @@
 import streamlit as st
 import pandas as pd
 import joblib
-import os
-import glob
+from pathlib import Path
 from PIL import Image
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="RDC - Expert Pauvreté", page_icon="🇨🇩", layout="wide")
 
-# --- CHARGEMENT DU LOGO LOCAL ---
-# Assurez-vous que l'image est dans le même dossier que ce script
-logo_filename = "logo_rdc.png"
+# --- CHEMINS DE BASE ---
+APP_DIR = Path(__file__).resolve().parent          # .../memoire/app
+PROJECT_ROOT = APP_DIR.parent                      # .../memoire
 
-# --- FONCTION DE SÉLECTION AUTOMATIQUE DU MEILLEUR MODÈLE ---
+# --- CHEMIN DU LOGO ---
+# Localement ton logo est dans : C:\Users\LENOVO\Desktop\memoire\app
+# Donc ici on cherche dans le même dossier que app.py
+logo_path = APP_DIR / "logo_rdc.png"
+
+# --- FONCTION DE CHARGEMENT DU MEILLEUR MODÈLE ---
 @st.cache_resource
 def load_best_pipeline():
-    # Chemin vers votre dossier de modèles
-    model_dir = r"C:\Users\LENOVO\Desktop\memoire\notebooks\outputs\models"
+    # Localement ton modèle est dans :
+    # C:\Users\LENOVO\Desktop\memoire\notebooks\outputs\models
+    # Donc on reconstruit ce chemin de façon portable
+    model_dir = PROJECT_ROOT / "notebooks" / "outputs" / "models"
 
-    # On cherche tous les fichiers .pkl dans ce dossier
-    list_of_files = glob.glob(os.path.join(model_dir, "*.pkl"))
+    list_of_files = sorted(model_dir.glob("*.pkl"), key=lambda p: p.stat().st_mtime) if model_dir.exists() else []
 
     if not list_of_files:
-        return None, None
+        return None, None, model_dir
 
-    # Sélection automatique du fichier le plus récent
-    latest_file = max(list_of_files, key=os.path.getctime)
+    latest_file = list_of_files[-1]
 
     try:
         bundle = joblib.load(latest_file)
-        return bundle['model'], os.path.basename(latest_file)
-    except Exception:
-        return None, None
 
-pipeline, model_name = load_best_pipeline()
+        # Si le .pkl contient un dict avec 'model'
+        if isinstance(bundle, dict) and "model" in bundle:
+            model = bundle["model"]
+        else:
+            model = bundle
+
+        return model, latest_file.name, model_dir
+
+    except Exception as e:
+        st.error(f"Erreur lors du chargement du modèle : {e}")
+        return None, None, model_dir
+
+
+pipeline, model_name, model_dir = load_best_pipeline()
 
 # --- DESIGN EN-TÊTE ---
 col_logo, col_texte = st.columns([1, 5])
 
 with col_logo:
-    if os.path.exists(logo_filename):
-        img = Image.open(logo_filename)
-        st.image(img, width=100)
+    if logo_path.exists():
+        img = Image.open(logo_path)
+        st.image(img, width=140)
     else:
-        st.info("Logo local")
+        st.info("Logo introuvable")
 
 with col_texte:
-    st.markdown(f"""
+    st.markdown(
+        f"""
         <h2 style="margin: 0; color: #1d3557;">République Démocratique du Congo</h2>
         <p style="margin: 0; color: #457b9d; font-size: 1.1em;">
             Système Expert de Prédiction de la Pauvreté (ECVM 2024)
         </p>
-        <p style="margin: 0; color: #7f8c8d; font-size: 0.8em;">Modèle actif : <b>{model_name if model_name else "Aucun"}</b></p>
-    """, unsafe_allow_html=True)
+        <p style="margin: 0; color: #7f8c8d; font-size: 0.8em;">
+            Modèle actif : <b>{model_name if model_name else "Aucun"}</b>
+        </p>
+        """,
+        unsafe_allow_html=True
+    )
 
 if pipeline is None:
     st.error("❌ Aucun modèle (.pkl) trouvé dans le dossier spécifié.")
+    st.write(f"Dossier recherché : {model_dir}")
     st.stop()
 
 # --- FORMULAIRE ---
@@ -105,7 +125,6 @@ with st.form("form_ecvm_final"):
     submit = st.form_submit_button("📊 ANALYSER LE STATUT")
 
 if submit:
-    # --- Contrôles de cohérence ---
     if nb_membres_compte_bancaire > taille_menage:
         st.error("Le nombre de membres avec compte bancaire ne peut pas dépasser la taille du ménage.")
         st.stop()
@@ -123,14 +142,12 @@ if submit:
 
     part_ayant_compte_bancaire = nb_membres_compte_bancaire / taille_menage
 
-    # Optionnel, juste pour information
     st.info(
         f"Variables calculées automatiquement : "
         f"ratio de dépendance = {ratio_dependance:.2f} | "
         f"part membres avec compte bancaire = {part_ayant_compte_bancaire:.2f}"
     )
 
-    # 1. Préparation des données
     data = {
         'hage': hage,
         'hgender': hgender,
@@ -155,7 +172,6 @@ if submit:
 
     input_df = pd.DataFrame([data])
 
-    # 2. Normalisation des textes
     obj_cols = input_df.select_dtypes(include=['object']).columns
     for col in obj_cols:
         input_df[col] = (
@@ -169,7 +185,10 @@ if submit:
 
     try:
         prediction = pipeline.predict(input_df)[0]
-        probabilite = pipeline.predict_proba(input_df)[0][1]
+
+        probabilite = None
+        if hasattr(pipeline, "predict_proba"):
+            probabilite = pipeline.predict_proba(input_df)[0][1]
 
         st.markdown("---")
         if prediction == 1:
@@ -177,8 +196,9 @@ if submit:
         else:
             st.success("### RÉSULTAT : MÉNAGE NON PAUVRE")
 
-        st.metric("Probabilité de pauvreté", f"{probabilite:.1%}")
-        st.progress(probabilite)
+        if probabilite is not None:
+            st.metric("Probabilité de pauvreté", f"{probabilite:.1%}")
+            st.progress(float(probabilite))
 
     except Exception as e:
         st.error(f"Erreur technique : {e}")
