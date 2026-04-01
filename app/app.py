@@ -10,26 +10,25 @@ st.set_page_config(page_title="RDC - Expert Pauvreté", page_icon="🇨🇩", la
 
 # --- CHARGEMENT DU LOGO LOCAL ---
 # Assurez-vous que l'image est dans le même dossier que ce script
-logo_filename = "logo_rdc.png" 
+logo_filename = "logo_rdc.png"
 
 # --- FONCTION DE SÉLECTION AUTOMATIQUE DU MEILLEUR MODÈLE ---
 @st.cache_resource
 def load_best_pipeline():
     # Chemin vers votre dossier de modèles
     model_dir = r"C:\Users\LENOVO\Desktop\memoire\notebooks\outputs\models"
-    
+
     # On cherche tous les fichiers .pkl dans ce dossier
     list_of_files = glob.glob(os.path.join(model_dir, "*.pkl"))
-    
+
     if not list_of_files:
         return None, None
 
-    # Sélection automatique du fichier le plus récent (le dernier sauvegardé)
+    # Sélection automatique du fichier le plus récent
     latest_file = max(list_of_files, key=os.path.getctime)
-    
+
     try:
         bundle = joblib.load(latest_file)
-        # On extrait le modèle et on récupère son nom pour l'affichage
         return bundle['model'], os.path.basename(latest_file)
     except Exception:
         return None, None
@@ -44,7 +43,7 @@ with col_logo:
         img = Image.open(logo_filename)
         st.image(img, width=100)
     else:
-        st.info("Logo local") # Affiche ceci si le fichier n'est pas encore là
+        st.info("Logo local")
 
 with col_texte:
     st.markdown(f"""
@@ -62,7 +61,7 @@ if pipeline is None:
 # --- FORMULAIRE ---
 with st.form("form_ecvm_final"):
     tab1, tab2, tab3 = st.tabs(["👤 Chef de Ménage", "🏠 Logement & Équipements", "📍 Localisation"])
-    
+
     with tab1:
         c1, c2 = st.columns(2)
         hage = c1.number_input("Âge du chef", 15, 100, 40)
@@ -82,35 +81,91 @@ with st.form("form_ecvm_final"):
         toilet = c4.radio("Toilettes saines", ["Oui", "Non"], horizontal=True)
         telpor = c4.radio("Possède téléphone", ["Oui", "Non"], horizontal=True)
         handig = c3.radio("Membre avec handicap", ["Oui", "Non"], horizontal=True)
-        part_ayant_compte_bancaire = c4.number_input("Part membres avec compte bancaire", min_value=0.0,max_value=1.0,value=0.1,step=0.01)
+        nb_membres_compte_bancaire = c4.number_input(
+            "Nombre de membres avec compte bancaire",
+            min_value=0,
+            max_value=30,
+            value=0,
+            step=1
+        )
 
     with tab3:
         c5, c6 = st.columns(2)
         province = c5.selectbox("Province", ["Kinshasa", "Bas-Uele", "Equateur", "Haut-Katanga", "Kasaï", "Lualaba", "Nord-Kivu", "Sud-Kivu", "Tshopo", "Autre"])
         milieu = c5.radio("Milieu de résidence", ["Urbain", "Rural"], horizontal=True)
         taille_menage = c6.number_input("Taille du ménage", 1, 30, 5)
-        ratio_dependance = c6.number_input("Ratio de dépendance", min_value=0.0, max_value=20.0, value=1.0, step=0.1)
+        nb_dependants = c6.number_input(
+            "Nombre de personnes à charge",
+            min_value=0,
+            max_value=30,
+            value=0,
+            step=1
+        )
 
     submit = st.form_submit_button("📊 ANALYSER LE STATUT")
 
 if submit:
+    # --- Contrôles de cohérence ---
+    if nb_membres_compte_bancaire > taille_menage:
+        st.error("Le nombre de membres avec compte bancaire ne peut pas dépasser la taille du ménage.")
+        st.stop()
+
+    if nb_dependants > taille_menage:
+        st.error("Le nombre de personnes à charge ne peut pas dépasser la taille du ménage.")
+        st.stop()
+
+    nb_actifs = taille_menage - nb_dependants
+
+    if nb_actifs <= 0:
+        ratio_dependance = 20.0
+    else:
+        ratio_dependance = nb_dependants / nb_actifs
+
+    part_ayant_compte_bancaire = nb_membres_compte_bancaire / taille_menage
+
+    # Optionnel, juste pour information
+    st.info(
+        f"Variables calculées automatiquement : "
+        f"ratio de dépendance = {ratio_dependance:.2f} | "
+        f"part membres avec compte bancaire = {part_ayant_compte_bancaire:.2f}"
+    )
+
     # 1. Préparation des données
     data = {
-        'hage': hage, 'hgender': hgender, 'heduc': heduc, 'hmar': hmar,
-        'hreligion': hreligion, 'hactiv12m': hactiv12m, 'hbranch': hbranch, 'hcsp': hcsp,
-        'province': province, 'milieu': milieu, 'taille_menage': taille_menage,
-        'ratio_dependance': ratio_dependance, 'typmen': typmen,
+        'hage': hage,
+        'hgender': hgender,
+        'heduc': heduc,
+        'hmar': hmar,
+        'hreligion': hreligion,
+        'hactiv12m': hactiv12m,
+        'hbranch': hbranch,
+        'hcsp': hcsp,
+        'province': province,
+        'milieu': milieu,
+        'taille_menage': taille_menage,
+        'ratio_dependance': ratio_dependance,
+        'typmen': typmen,
         'part_ayant_compte_bancaire': part_ayant_compte_bancaire,
-        'toilet': toilet, 'handig': handig, 'elec_ac': elec_ac,
-        'telpor': telpor, 'logem': logem
+        'toilet': toilet,
+        'handig': handig,
+        'elec_ac': elec_ac,
+        'telpor': telpor,
+        'logem': logem
     }
-    
+
     input_df = pd.DataFrame([data])
 
-    # 2. Normalisation des textes (Minuscules/Sans accents pour le Pipeline)
+    # 2. Normalisation des textes
     obj_cols = input_df.select_dtypes(include=['object']).columns
     for col in obj_cols:
-        input_df[col] = input_df[col].astype(str).str.lower().str.normalize('NFKD').str.encode('ascii', errors='ignore').str.decode('utf-8')
+        input_df[col] = (
+            input_df[col]
+            .astype(str)
+            .str.lower()
+            .str.normalize('NFKD')
+            .str.encode('ascii', errors='ignore')
+            .str.decode('utf-8')
+        )
 
     try:
         prediction = pipeline.predict(input_df)[0]
@@ -118,10 +173,10 @@ if submit:
 
         st.markdown("---")
         if prediction == 1:
-            st.error(f"### RÉSULTAT : MÉNAGE PAUVRE")
+            st.error("### RÉSULTAT : MÉNAGE PAUVRE")
         else:
-            st.success(f"### RÉSULTAT : MÉNAGE NON PAUVRE")
-        
+            st.success("### RÉSULTAT : MÉNAGE NON PAUVRE")
+
         st.metric("Probabilité de pauvreté", f"{probabilite:.1%}")
         st.progress(probabilite)
 
